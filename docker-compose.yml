@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: txlogpay-postgres
+    environment:
+      POSTGRES_USER: txlogpay
+      POSTGRES_PASSWORD: txlogpay
+      POSTGRES_DB: txlogpay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U txlogpay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: txlogpay-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # ── Backend (FastAPI) ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: txlogpay-backend
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://txlogpay:txlogpay@postgres:5432/txlogpay
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - invoice_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Frontend (Next.js) ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: txlogpay-frontend
+    env_file: ./frontend/.env.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000/api/v1
+
+  # ── Scrapy worker ───────────────────────────────────────────────────────────
+  scrapy:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: txlogpay-scrapy
+    env_file: ./backend/.env
+    working_dir: /app/scrapy_spider
+    command: >
+      sh -c "playwright install chromium &&
+             scrapy crawl modalpay -o /app/scrapy_spider/modalpay_data.json"
+    volumes:
+      - ./backend:/app
+    profiles:
+      - scrape
+
+volumes:
+  postgres_data:
+  redis_data:
+  invoice_uploads:
