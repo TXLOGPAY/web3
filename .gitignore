@@ -1,0 +1,91 @@
+# ============================================================
+# Rust / Soroban contracts
+# ============================================================
+target/
+**/*.rs.bk
+Cargo.lock
+
+# ============================================================
+# Python / FastAPI backend
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy / pyright
+.mypy_cache/
+.dmypy.json
+pyrightconfig.json
+
+# Scrapy
+.scrapy/
+
+# ============================================================
+# Next.js / Node frontend
+# ============================================================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/.vercel/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# ============================================================
+# Environment & secrets
+# ============================================================
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ============================================================
+# Docker
+# ============================================================
+docker-compose.override.yml
+
+# ============================================================
+# Editors & OS
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Logs & temp
+# ============================================================
+logs/
+*.log
+tmp/
+temp/
