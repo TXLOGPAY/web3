@@ -1,6 +1,6 @@
 """Logistics flags routes — trigger FlagsReceptor smart contract."""
 from fastapi import APIRouter, HTTPException
-from app.models.schemas import SetFlagRequest, FlagsState, LogisticFlag
+from app.models.schemas import SetFlagRequest, FlagsState, LogisticFlag, BuildSetFlagXdrRequest
 from app.services import stellar_service
 from app.core.config import settings
 import structlog
@@ -54,6 +54,40 @@ async def set_flag(req: SetFlagRequest):
         }
     except Exception as e:
         log.error("flag_set_failed", flag=req.flag, op_id=req.op_id, error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/build", summary="Build unsigned set-flag transaction XDR")
+async def build_set_flag_xdr(req: BuildSetFlagXdrRequest):
+    """
+    Build and simulate a set-flag transaction; return unsigned prepared XDR.
+    The caller signs the XDR client-side and submits via POST /stellar/submit.
+    No secret key is required or accepted.
+    """
+    if not settings.FLAGS_CONTRACT_ID:
+        raise HTTPException(status_code=503, detail="FLAGS_CONTRACT_ID not configured")
+
+    fn_name = FLAG_TO_FN.get(req.flag)
+    if not fn_name:
+        raise HTTPException(status_code=400, detail="Unknown flag")
+
+    from stellar_sdk import scval
+
+    args = [
+        scval.to_address(req.caller_public_key),
+        scval.to_uint64(req.op_id),
+    ]
+
+    try:
+        xdr = await stellar_service.build_soroban_transaction_xdr(
+            contract_id=settings.FLAGS_CONTRACT_ID,
+            function_name=fn_name,
+            args=args,
+            caller_public_key=req.caller_public_key,
+        )
+        return {"xdr": xdr, "network_passphrase": stellar_service.NETWORK_PASSPHRASE}
+    except Exception as e:
+        log.error("flag_build_failed", flag=req.flag, op_id=req.op_id, error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 

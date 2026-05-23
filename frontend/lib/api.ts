@@ -101,8 +101,22 @@ export const operationsApi = {
 // ─── Flags API ────────────────────────────────────────────────────────────────
 
 export const flagsApi = {
-  setFlag: (opId: number, flag: LogisticFlag, callerSecret: string) =>
-    api.post("/flags/set", { op_id: opId, flag, caller_secret: callerSecret }),
+  setFlag: async (opId: number, flag: LogisticFlag, callerSecret: string) => {
+    const { publicKeyFromSecret, signTransactionXdr } = await import(
+      "./stellar-signing"
+    );
+    const callerPublicKey = await publicKeyFromSecret(callerSecret);
+    const { data: build } = await api.post<{
+      xdr: string;
+      network_passphrase: string;
+    }>("/flags/build", { op_id: opId, flag, caller_public_key: callerPublicKey });
+    const signedXdr = await signTransactionXdr(
+      build.xdr,
+      callerSecret,
+      build.network_passphrase
+    );
+    return api.post("/stellar/submit", { signed_xdr: signedXdr });
+  },
   getFlags: (opId: number) => api.get<FlagsState>(`/flags/${opId}`),
   initOperation: (opId: number, callerSecret: string) =>
     api.post(`/flags/init/${opId}`, undefined, { params: { caller_secret: callerSecret } }),
@@ -124,8 +138,22 @@ export const escrowApi = {
   }) => api.post("/escrow/create", data),
   fund: (opId: number, importerSecret: string) =>
     api.post("/escrow/fund", { op_id: opId, importer_secret: importerSecret }),
-  release: (opId: number, callerSecret: string) =>
-    api.post("/escrow/release", { op_id: opId, caller_secret: callerSecret }),
+  release: async (opId: number, callerSecret: string) => {
+    const { publicKeyFromSecret, signTransactionXdr } = await import(
+      "./stellar-signing"
+    );
+    const callerPublicKey = await publicKeyFromSecret(callerSecret);
+    const { data: build } = await api.post<{
+      xdr: string;
+      network_passphrase: string;
+    }>("/escrow/build-release", { op_id: opId, caller_public_key: callerPublicKey });
+    const signedXdr = await signTransactionXdr(
+      build.xdr,
+      callerSecret,
+      build.network_passphrase
+    );
+    return api.post("/stellar/submit", { signed_xdr: signedXdr });
+  },
   dispute: (opId: number, callerSecret: string) =>
     api.post(`/escrow/dispute/${opId}`, undefined, { params: { caller_secret: callerSecret } }),
   calculateFee: (amount: number) => api.get(`/escrow/fee/${amount}`),

@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.schemas import (
     CreateEscrowRequest, FundEscrowRequest,
     ReleaseEscrowRequest, EscrowStateResponse,
+    BuildReleaseXdrRequest,
 )
 from app.services import stellar_service
 from app.core.config import settings
@@ -122,6 +123,36 @@ async def release_escrow(req: ReleaseEscrowRequest):
         }
     except Exception as e:
         log.error("escrow_release_failed", op_id=req.op_id, error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/build-release", summary="Build unsigned release transaction XDR")
+async def build_release_xdr(req: BuildReleaseXdrRequest):
+    """
+    Build and simulate a release transaction; return unsigned prepared XDR.
+    The caller signs the XDR client-side and submits via POST /stellar/submit.
+    No secret key is required or accepted.
+    """
+    if not settings.ESCROW_CONTRACT_ID:
+        raise HTTPException(status_code=503, detail="ESCROW_CONTRACT_ID not configured")
+
+    from stellar_sdk import scval
+
+    args = [
+        scval.to_address(req.caller_public_key),
+        scval.to_uint64(req.op_id),
+    ]
+
+    try:
+        xdr = await stellar_service.build_soroban_transaction_xdr(
+            contract_id=settings.ESCROW_CONTRACT_ID,
+            function_name="release",
+            args=args,
+            caller_public_key=req.caller_public_key,
+        )
+        return {"xdr": xdr, "network_passphrase": stellar_service.NETWORK_PASSPHRASE}
+    except Exception as e:
+        log.error("escrow_build_release_failed", op_id=req.op_id, error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 

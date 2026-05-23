@@ -200,6 +200,23 @@ class EtherfuseOrderResponse(BaseModel):
     created_at: str
 
 
+# ─── XDR build / submit (client-side signing) ────────────────────────────────
+
+class BuildSetFlagXdrRequest(BaseModel):
+    op_id: int
+    flag: LogisticFlag
+    caller_public_key: str = Field(description="Caller public key (G...) — no secret sent")
+
+
+class BuildReleaseXdrRequest(BaseModel):
+    op_id: int
+    caller_public_key: str = Field(description="Caller public key (G...) — no secret sent")
+
+
+class SubmitXdrRequest(BaseModel):
+    signed_xdr: str = Field(description="Base64 signed transaction XDR")
+
+
 # ─── Operation (unified) ─────────────────────────────────────────────────────
 
 class OperationSummary(BaseModel):

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from app.models.schemas import (
     CreateAccountRequest, AccountInfo,
-    FundAccountRequest,
+    FundAccountRequest, SubmitXdrRequest,
 )
 from app.services import stellar_service
 
@@ -51,6 +51,16 @@ async def setup_demo_accounts():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/submit", summary="Submit a pre-signed transaction XDR")
+async def submit_transaction(req: SubmitXdrRequest):
+    """Submit a Soroban transaction that was signed client-side."""
+    try:
+        result = await stellar_service.submit_signed_transaction_xdr(req.signed_xdr)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/transfer", summary="Transfer XLM between accounts")

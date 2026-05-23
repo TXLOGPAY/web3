@@ -177,3 +177,64 @@ async def invoke_soroban_contract(
         time.sleep(2)
 
     raise TimeoutError(f"Transaction {tx_hash} not confirmed after 60s")
+
+
+async def build_soroban_transaction_xdr(
+    contract_id: str,
+    function_name: str,
+    args: list,
+    caller_public_key: str,
+) -> str:
+    """Build and simulate a Soroban transaction; return unsigned prepared XDR.
+
+    The caller must sign the XDR client-side and submit via submit_signed_transaction_xdr.
+    """
+    soroban_server = SorobanServer(settings.STELLAR_RPC_URL)
+    horizon_server = Server(settings.STELLAR_HORIZON_URL)
+
+    source_account = horizon_server.load_account(caller_public_key)
+
+    tx = (
+        TransactionBuilder(
+            source_account=source_account,
+            network_passphrase=NETWORK_PASSPHRASE,
+            base_fee=1_000_000,
+        )
+        .append_invoke_contract_function_op(
+            contract_id=contract_id,
+            function_name=function_name,
+            parameters=args,
+        )
+        .set_timeout(60)
+        .build()
+    )
+
+    simulate_resp = soroban_server.simulate_transaction(tx)
+    if hasattr(simulate_resp, "error"):
+        raise RuntimeError(f"Simulation failed: {simulate_resp.error}")
+
+    prepared_tx = soroban_server.prepare_transaction(tx)
+    return prepared_tx.to_xdr()
+
+
+async def submit_signed_transaction_xdr(signed_xdr: str) -> dict:
+    """Submit a pre-signed Soroban transaction XDR to the network."""
+    from stellar_sdk import TransactionEnvelope
+
+    soroban_server = SorobanServer(settings.STELLAR_RPC_URL)
+    tx = TransactionEnvelope.from_xdr(signed_xdr, network_passphrase=NETWORK_PASSPHRASE)
+
+    send_resp = soroban_server.send_transaction(tx)
+    tx_hash = send_resp.hash
+
+    import time
+    for _ in range(30):
+        get_resp = soroban_server.get_transaction(tx_hash)
+        if get_resp.status == GetTransactionStatus.SUCCESS:
+            log.info("contract_invoked_via_xdr", hash=tx_hash)
+            return {"hash": tx_hash, "status": "success", "result": str(get_resp.return_value)}
+        if get_resp.status == GetTransactionStatus.FAILED:
+            raise RuntimeError(f"Contract call failed: {tx_hash}")
+        time.sleep(2)
+
+    raise TimeoutError(f"Transaction {tx_hash} not confirmed after 60s")
